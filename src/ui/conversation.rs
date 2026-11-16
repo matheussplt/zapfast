@@ -682,6 +682,7 @@ fn header(app: &mut App, ui: &mut egui::Ui, chat: &Chat) -> Rect {
                         crate::i18n::gettext(app.locale, "Archive")
                     };
                     let export_label = crate::i18n::gettext(app.locale, "Export chat…");
+                    let followup_label = "Private note and reminder…";
                     let clear_label = crate::i18n::gettext(app.locale, "Clear chat");
                     let copy_number_label = crate::i18n::gettext(app.locale, "Copy number");
                     let close_label = crate::i18n::gettext(app.locale, "Close chat");
@@ -700,6 +701,7 @@ fn header(app: &mut App, ui: &mut egui::Ui, chat: &Chat) -> Rect {
                             archive_label.as_ref(),
                             clear_label.as_ref(),
                             export_label.as_ref(),
+                            followup_label,
                             leave_label.as_ref(),
                             copy_number_label.as_ref(),
                             close_label.as_ref(),
@@ -794,6 +796,9 @@ fn header(app: &mut App, ui: &mut egui::Ui, chat: &Chat) -> Rect {
                                     chat: chat.id.clone(),
                                     include_media: false,
                                 }));
+                            }
+                            if widgets::menu_item(ui, &palette, Some(Icon::Bell), followup_label) {
+                                app.actions.push(Action::ShowDialog(Dialog::LocalFollowup(chat.id.clone())));
                             }
                             super::blocking::menu(app, ui, &chat.id);
                             // Clearing reaches the phone, so it waits for a

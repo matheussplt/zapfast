@@ -2330,6 +2330,7 @@ impl Worker {
             last.full = self.pn_tokens(&last.full);
         }
         chat.labels = self.archive.chat_labels(&chat.id).unwrap_or_default();
+        chat.followup = self.archive.local_followup(&chat.id).unwrap_or_default();
         if chat.is_group() && chat.unread > 0 {
             let ours: Vec<&str> = [self.me_pn.as_deref(), self.me_lid.as_deref()]
                 .into_iter()
@@ -8788,6 +8789,12 @@ impl Worker {
                     log::warn!("could not assign labels: {error}");
                 }
                 self.emit_chat(&chat);
+            }
+            Command::SetLocalFollowup { chat, note, remind_at } => {
+                match self.archive.set_local_followup(&chat, &note, remind_at) {
+                    Ok(()) => self.emit_chat(&chat),
+                    Err(error) => log::warn!("could not save local follow-up: {error}"),
+                }
             }
             Command::SetLocked(chat, locked) => {
                 let _ = self.archive.set_locked(&chat, locked);

@@ -260,6 +260,13 @@ impl CallFilter {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct LocalFollowup {
+    pub note: String,
+    /// Unix seconds; the reminder remains visible after it becomes due.
+    pub remind_at: Option<i64>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Chat {
     pub id: ChatId,
@@ -314,6 +321,8 @@ pub struct Chat {
     pub ephemeral_expiration: Option<u32>,
     /// Labels worn by this chat, in creation order. Local to this computer.
     pub labels: Vec<String>,
+    /// Private note and reminder, stored only in this computer's archive.
+    pub followup: LocalFollowup,
     /// This chat's own notification sound; `None` follows Settings.
     pub notification_sound: Option<crate::settings::NotificationSound>,
     /// The oldest unread message that mentions us (or everyone), which the
@@ -410,6 +419,7 @@ impl Chat {
             locked: false,
             ephemeral_expiration: None,
             labels: Vec::new(),
+            followup: LocalFollowup::default(),
             notification_sound: None,
             unread_mention: None,
             voice_speed: None,
@@ -2496,6 +2506,8 @@ pub enum Dialog {
     },
     /// Manages the local labels.
     Labels,
+    /// Edits a private note and local reminder for one chat.
+    LocalFollowup(ChatId),
     /// Confirms deleting a chat, which cannot be undone.
     ConfirmDeleteChat(ChatId),
     /// Confirms clearing a chat's messages, which cannot be undone.
@@ -3197,6 +3209,11 @@ pub enum Action {
     SetChatLabels {
         chat: ChatId,
         labels: Vec<String>,
+    },
+    SetLocalFollowup {
+        chat: ChatId,
+        note: String,
+        remind_at: Option<i64>,
     },
     /// Creates a label from the name and colour in the manager dialog.
     CreateLabel {

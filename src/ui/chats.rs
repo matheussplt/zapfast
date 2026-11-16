@@ -1640,6 +1640,19 @@ fn row(app: &mut App, ui: &mut egui::Ui, chat: &Chat) -> egui::Response {
             Icon::Pin.image(palette.dim, 14.0).paint_at(ui, icon_rect);
             badge_right -= 20.0;
         }
+        if let Some(due) = chat.followup.remind_at {
+            let color = if due <= now { palette.accent } else { palette.dim };
+            let icon_rect = Rect::from_center_size(
+                pos2(badge_right - 8.0, line_y + 8.0), Vec2::splat(15.0),
+            );
+            Icon::Bell.image(color, 15.0).paint_at(ui, icon_rect);
+            badge_right -= 20.0;
+            if due > now {
+                ui.ctx().request_repaint_after(std::time::Duration::from_secs(
+                    (due - now).min(60) as u64,
+                ));
+            }
+        }
         let mut x = left;
         let typing = app.typing_in(&chat.id);
         let preview_color = if unread && !muted {
@@ -2118,6 +2131,9 @@ fn compact_badge_center(avatar: Rect) -> egui::Pos2 {
 
 fn context_menu(app: &mut App, ui: &mut egui::Ui, chat: &Chat, palette: &Palette) {
     let locale = app.locale;
+    if widgets::menu_item(ui, palette, Some(Icon::Bell), "Private note and reminder…") {
+        app.actions.push(Action::ShowDialog(Dialog::LocalFollowup(chat.id.clone())));
+    }
     if chat.looks_unread()
         && widgets::menu_item(
             ui,

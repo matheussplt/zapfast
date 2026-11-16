@@ -494,6 +494,12 @@ pub enum Command {
         chat: ChatId,
         labels: Vec<String>,
     },
+    /// Saves a private note and reminder without contacting WhatsApp.
+    SetLocalFollowup {
+        chat: ChatId,
+        note: String,
+        remind_at: Option<i64>,
+    },
     /// Normalizes, encodes, and sends mono 48 kHz push-to-talk audio.
     SendVoice {
         chat: ChatId,

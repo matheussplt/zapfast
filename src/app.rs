@@ -779,6 +779,9 @@ pub struct App {
     pub label_editing: Option<(String, String)>,
     /// Label the chat list shows; `None` shows every chat.
     pub label_filter: Option<String>,
+    /// Unsaved private follow-up in the dialog.
+    pub followup_note: String,
+    pub followup_remind_at: Option<i64>,
     /// Chats opened from the Unread list, kept there until the filter changes.
     unread_kept: HashSet<ChatId>,
     pub toasts: Vec<Toast>,
@@ -1716,6 +1719,8 @@ impl App {
             label_color: crate::archive::DEFAULT_COLOR.to_owned(),
             label_editing: None,
             label_filter: None,
+            followup_note: String::new(),
+            followup_remind_at: None,
             unread_kept: HashSet::new(),
             toasts: Vec::new(),
             actions: Vec::new(),
@@ -9090,6 +9095,14 @@ impl App {
             Action::ShowDialog(dialog) => {
                 self.cancel_contact_dialog_request();
                 self.clear_chat_lock_entry();
+                if let Dialog::LocalFollowup(chat) = &dialog {
+                    let followup = self
+                        .chat(chat)
+                        .map(|chat| chat.followup.clone())
+                        .unwrap_or_default();
+                    self.followup_note = followup.note;
+                    self.followup_remind_at = followup.remind_at;
+                }
                 if dialog == Dialog::BlockedContacts {
                     self.backend.send(Command::FetchBlocklist);
                 }
@@ -9310,6 +9323,9 @@ impl App {
             Action::SelectLabel(label) => self.select_label(label),
             Action::SetChatLabels { chat, labels } => {
                 self.backend.send(Command::SetChatLabels { chat, labels });
+            }
+            Action::SetLocalFollowup { chat, note, remind_at } => {
+                self.backend.send(Command::SetLocalFollowup { chat, note, remind_at });
             }
             Action::CreateLabel { name, color_hex } => {
                 let name = name.trim().to_owned();
