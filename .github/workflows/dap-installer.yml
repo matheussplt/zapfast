@@ -25,6 +25,18 @@ jobs:
       - uses: jdx/mr-boxington-action@v1
         with:
           cache-generation: dap-installer-v1
+      - name: Use native Windows Perl for OpenSSL
+        shell: pwsh
+        run: |
+          $perlDir = 'C:\Strawberry\perl\bin'
+          if (!(Test-Path -LiteralPath (Join-Path $perlDir 'perl.exe'))) {
+            choco install strawberryperl --no-progress -y
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          if (!(Test-Path -LiteralPath (Join-Path $perlDir 'perl.exe'))) { throw 'Native Windows Perl missing' }
+          $env:PATH = "$perlDir;$env:PATH"
+          $perlDir | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          & (Join-Path $perlDir 'perl.exe') -v
       - name: Test individual requests
         run: |
           mbx test --locked --lib archive::followups
