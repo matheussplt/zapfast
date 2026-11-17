@@ -8790,12 +8790,14 @@ impl Worker {
                 }
                 self.emit_chat(&chat);
             }
-            Command::SetLocalFollowup { chat, note, remind_at } => {
-                match self.archive.set_local_followup(&chat, &note, remind_at) {
-                    Ok(()) => self.emit_chat(&chat),
-                    Err(error) => log::warn!("could not save local follow-up: {error}"),
-                }
-            }
+            Command::SetLocalFollowup {
+                chat,
+                note,
+                remind_at,
+            } => match self.archive.set_local_followup(&chat, &note, remind_at) {
+                Ok(()) => self.emit_chat(&chat),
+                Err(error) => log::warn!("could not save local follow-up: {error}"),
+            },
             Command::SetLocked(chat, locked) => {
                 let _ = self.archive.set_locked(&chat, locked);
                 self.emit_chat(&chat);

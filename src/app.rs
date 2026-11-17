@@ -9324,8 +9324,16 @@ impl App {
             Action::SetChatLabels { chat, labels } => {
                 self.backend.send(Command::SetChatLabels { chat, labels });
             }
-            Action::SetLocalFollowup { chat, note, remind_at } => {
-                self.backend.send(Command::SetLocalFollowup { chat, note, remind_at });
+            Action::SetLocalFollowup {
+                chat,
+                note,
+                remind_at,
+            } => {
+                self.backend.send(Command::SetLocalFollowup {
+                    chat,
+                    note,
+                    remind_at,
+                });
             }
             Action::CreateLabel { name, color_hex } => {
                 let name = name.trim().to_owned();

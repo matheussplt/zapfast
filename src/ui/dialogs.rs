@@ -169,13 +169,24 @@ fn local_followup(app: &mut App, ui: &mut egui::Ui, chat: &str) {
     ui.label("Remind me");
     let now = crate::util::now();
     ui.horizontal_wrapped(|ui| {
-        if ui.button("None").clicked() { app.followup_remind_at = None; }
-        if ui.button("In 1 hour").clicked() { app.followup_remind_at = Some(now + 3600); }
-        if ui.button("In 1 day").clicked() { app.followup_remind_at = Some(now + 86400); }
-        if ui.button("In 3 days").clicked() { app.followup_remind_at = Some(now + 259200); }
+        if ui.button("None").clicked() {
+            app.followup_remind_at = None;
+        }
+        if ui.button("In 1 hour").clicked() {
+            app.followup_remind_at = Some(now + 3600);
+        }
+        if ui.button("In 1 day").clicked() {
+            app.followup_remind_at = Some(now + 86400);
+        }
+        if ui.button("In 3 days").clicked() {
+            app.followup_remind_at = Some(now + 259200);
+        }
     });
     if let Some(at) = app.followup_remind_at {
-        ui.label(format!("Selected: {}", crate::util::moment_stamp(app.locale, at)));
+        ui.label(format!(
+            "Selected: {}",
+            crate::util::moment_stamp(app.locale, at)
+        ));
     }
     ui.horizontal(|ui| {
         if ui.button("Save").clicked() {

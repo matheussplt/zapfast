@@ -798,7 +798,9 @@ fn header(app: &mut App, ui: &mut egui::Ui, chat: &Chat) -> Rect {
                                 }));
                             }
                             if widgets::menu_item(ui, &palette, Some(Icon::Bell), followup_label) {
-                                app.actions.push(Action::ShowDialog(Dialog::LocalFollowup(chat.id.clone())));
+                                app.actions.push(Action::ShowDialog(Dialog::LocalFollowup(
+                                    chat.id.clone(),
+                                )));
                             }
                             super::blocking::menu(app, ui, &chat.id);
                             // Clearing reaches the phone, so it waits for a

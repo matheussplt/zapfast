@@ -37,7 +37,8 @@ impl Archive {
     pub fn set_local_followup(&self, chat: &str, note: &str, remind_at: Option<i64>) -> Result<()> {
         let note: String = note.trim().chars().take(NOTE_LIMIT).collect();
         if note.is_empty() && remind_at.is_none() {
-            self.connection.execute("DELETE FROM local_chat_followups WHERE chat = ?1", [chat])?;
+            self.connection
+                .execute("DELETE FROM local_chat_followups WHERE chat = ?1", [chat])?;
         } else {
             self.connection.execute(
                 "INSERT INTO local_chat_followups (chat, note, remind_at) VALUES (?1, ?2, ?3)
@@ -56,12 +57,24 @@ mod tests {
     #[test]
     fn followup_round_trip_and_clear() {
         let archive = Archive::in_memory().unwrap();
-        assert_eq!(archive.local_followup("chat").unwrap(), LocalFollowup::default());
-        archive.set_local_followup("chat", "  Call back  ", Some(123)).unwrap();
-        assert_eq!(archive.local_followup("chat").unwrap(), LocalFollowup {
-            note: "Call back".into(), remind_at: Some(123),
-        });
+        assert_eq!(
+            archive.local_followup("chat").unwrap(),
+            LocalFollowup::default()
+        );
+        archive
+            .set_local_followup("chat", "  Call back  ", Some(123))
+            .unwrap();
+        assert_eq!(
+            archive.local_followup("chat").unwrap(),
+            LocalFollowup {
+                note: "Call back".into(),
+                remind_at: Some(123),
+            }
+        );
         archive.set_local_followup("chat", "", None).unwrap();
-        assert_eq!(archive.local_followup("chat").unwrap(), LocalFollowup::default());
+        assert_eq!(
+            archive.local_followup("chat").unwrap(),
+            LocalFollowup::default()
+        );
     }
 }
