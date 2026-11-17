@@ -84,14 +84,16 @@ jobs:
           if ($process.ExitCode -ne 0) { throw "MSI install failed: $($process.ExitCode)" }
           $exe = Join-Path $env:LOCALAPPDATA 'Programs\ZapFast DAP\zapfast-dap.exe'
           if (!(Test-Path -LiteralPath $exe)) { throw 'DAP executable missing' }
-          & $exe --version
-          if ($LASTEXITCODE -ne 0) { throw 'DAP executable did not start' }
+          $version = Start-Process -FilePath $exe -ArgumentList '--version' -Wait -PassThru -WindowStyle Hidden
+          if ($version.ExitCode -ne 0) { throw "DAP executable did not start: $($version.ExitCode)" }
           if ((Get-Content -LiteralPath (Join-Path $original 'sentinel.txt')) -ne 'original untouched') { throw 'Original install changed' }
           $process = Start-Process msiexec.exe -ArgumentList @('/x', ('"' + $msi + '"'), '/qn', '/norestart') -Wait -PassThru -WindowStyle Hidden
           if ($process.ExitCode -ne 0) { throw "MSI uninstall failed: $($process.ExitCode)" }
           if ((Get-Content -LiteralPath (Join-Path $original 'sentinel.txt')) -ne 'original untouched') { throw 'Original install changed on uninstall' }
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: ZapFast-DAP-Windows-installer
           path: dist/ZapFast-DAP-x64.msi
           retention-days: 7
+          if-no-files-found: ignore
