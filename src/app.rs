@@ -782,6 +782,7 @@ pub struct App {
     /// Unsaved private follow-up in the dialog.
     pub followup_note: String,
     pub followup_remind_at: Option<i64>,
+    pub followup_done: bool,
     /// Chats opened from the Unread list, kept there until the filter changes.
     unread_kept: HashSet<ChatId>,
     pub toasts: Vec<Toast>,
@@ -1721,6 +1722,7 @@ impl App {
             label_filter: None,
             followup_note: String::new(),
             followup_remind_at: None,
+            followup_done: false,
             unread_kept: HashSet::new(),
             toasts: Vec::new(),
             actions: Vec::new(),
@@ -3942,6 +3944,30 @@ impl App {
                     self.request_info_media_if_unloaded();
                 }
             }
+            Event::LocalFollowups { chat, items } => {
+                if live {
+                    let editing = match &self.dialog {
+                        Some(Dialog::LocalFollowup {
+                            chat: open,
+                            message,
+                        }) if *open == chat => Some(message.clone()),
+                        _ => None,
+                    };
+                    self.followups
+                        .insert(chat.clone(), items.into_iter().collect());
+                    if let Some(message) = editing {
+                        let current = self
+                            .followups
+                            .get(&chat)
+                            .and_then(|items| items.get(&message))
+                            .cloned()
+                            .unwrap_or_default();
+                        self.followup_note = current.note;
+                        self.followup_remind_at = current.remind_at;
+                        self.followup_done = current.done;
+                    }
+                }
+            }
             Event::Messages {
                 chat,
                 messages,
@@ -3964,6 +3990,9 @@ impl App {
                     conversation.phone_delivered = true;
                 }
                 conversation.merge(messages, older);
+                if live {
+                    self.backend.send(Command::LoadLocalFollowups(chat.clone()));
+                }
                 if older {
                     conversation.loading_older = false;
                     conversation.complete = complete;
@@ -4440,15 +4469,20 @@ impl App {
                 }
                 // A deleted message leaves the starred list.
                 self.forget_star(&chat, &id);
+                if let Some(items) = self.followups.get_mut(&chat) {
+                    items.remove(&id);
+                }
             }
             Event::ChatRemoved { chat } => {
                 self.forget_chat(&chat);
                 self.stars.remove(&chat);
+                self.followups.remove(&chat);
                 self.reload_lists();
             }
             Event::ChatCleared { chat, through } => {
                 self.handle_chat_cleared(&chat, through, live);
                 self.stars.remove(&chat);
+                self.followups.remove(&chat);
                 // Clearing the chat clears its pins in the archive too.
                 self.pins.remove(&chat);
                 self.chat_pins.remove(&chat);
@@ -5158,6 +5192,7 @@ impl App {
                 self.starred.clear();
                 self.show_starred = false;
                 self.stars.clear();
+                self.followups.clear();
                 self.pins.clear();
                 self.chat_pins.clear();
                 self.account_privacy = crate::privacy::Snapshot::default();
@@ -9095,13 +9130,17 @@ impl App {
             Action::ShowDialog(dialog) => {
                 self.cancel_contact_dialog_request();
                 self.clear_chat_lock_entry();
-                if let Dialog::LocalFollowup(chat) = &dialog {
+                if let Dialog::LocalFollowup { chat, message } = &dialog {
                     let followup = self
-                        .chat(chat)
-                        .map(|chat| chat.followup.clone())
+                        .followups
+                        .get(chat)
+                        .and_then(|items| items.get(message))
+                        .cloned()
                         .unwrap_or_default();
                     self.followup_note = followup.note;
                     self.followup_remind_at = followup.remind_at;
+                    self.followup_done = followup.done;
+                    self.backend.send(Command::LoadLocalFollowups(chat.clone()));
                 }
                 if dialog == Dialog::BlockedContacts {
                     self.backend.send(Command::FetchBlocklist);
@@ -9326,13 +9365,17 @@ impl App {
             }
             Action::SetLocalFollowup {
                 chat,
+                message,
                 note,
                 remind_at,
+                done,
             } => {
                 self.backend.send(Command::SetLocalFollowup {
                     chat,
+                    message,
                     note,
                     remind_at,
+                    done,
                 });
             }
             Action::CreateLabel { name, color_hex } => {

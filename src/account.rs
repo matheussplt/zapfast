@@ -122,6 +122,8 @@ pub struct Account {
     /// Ids of the starred messages of each chat, for the mark in the
     /// conversation. Filled when a chat opens and on every confirmed star.
     pub stars: HashMap<ChatId, HashSet<String>>,
+    /// Private requests keyed by message id, isolated to this account.
+    pub followups: HashMap<ChatId, HashMap<String, crate::model::LocalFollowup>>,
     /// Ids of each chat's pinned messages, for its menu and its bubble mark.
     pub pins: HashMap<ChatId, HashSet<String>>,
     /// Active pins of each chat, for the line under its header.
@@ -247,6 +249,7 @@ impl Account {
             starred: Vec::new(),
             show_starred: false,
             stars: HashMap::new(),
+            followups: HashMap::new(),
             pins: HashMap::new(),
             chat_pins: HashMap::new(),
             reply_when_loaded: None,

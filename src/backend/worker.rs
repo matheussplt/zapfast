@@ -2301,6 +2301,16 @@ impl Worker {
         }
     }
 
+    fn emit_local_followups(&self, chat: &str) {
+        match self.archive.local_followups(chat) {
+            Ok(items) => self.emit(Event::LocalFollowups {
+                chat: chat.to_owned(),
+                items,
+            }),
+            Err(error) => log::warn!("could not load local follow-ups: {error}"),
+        }
+    }
+
     /// Hands the chat's viewer album to the interface, centred on `around`
     /// when the viewer opened on a message rather than on the newest page.
     fn emit_chat_media(&mut self, chat: ChatId, around: Option<String>) {
@@ -2330,7 +2340,10 @@ impl Worker {
             last.full = self.pn_tokens(&last.full);
         }
         chat.labels = self.archive.chat_labels(&chat.id).unwrap_or_default();
-        chat.followup = self.archive.local_followup(&chat.id).unwrap_or_default();
+        chat.followup = self
+            .archive
+            .local_followup_summary(&chat.id)
+            .unwrap_or_default();
         if chat.is_group() && chat.unread > 0 {
             let ours: Vec<&str> = [self.me_pn.as_deref(), self.me_lid.as_deref()]
                 .into_iter()
@@ -8792,12 +8805,21 @@ impl Worker {
             }
             Command::SetLocalFollowup {
                 chat,
+                message,
                 note,
                 remind_at,
-            } => match self.archive.set_local_followup(&chat, &note, remind_at) {
-                Ok(()) => self.emit_chat(&chat),
+                done,
+            } => match self
+                .archive
+                .set_local_followup(&chat, &message, &note, remind_at, done)
+            {
+                Ok(()) => {
+                    self.emit_chat(&chat);
+                    self.emit_local_followups(&chat);
+                }
                 Err(error) => log::warn!("could not save local follow-up: {error}"),
             },
+            Command::LoadLocalFollowups(chat) => self.emit_local_followups(&chat),
             Command::SetLocked(chat, locked) => {
                 let _ = self.archive.set_locked(&chat, locked);
                 self.emit_chat(&chat);

@@ -2208,7 +2208,7 @@ impl Archive {
             > 0;
         self.purge_chat_rows(chat)?;
         self.connection.execute(
-            "DELETE FROM local_chat_followups WHERE chat = ?1",
+            "DELETE FROM local_message_followups WHERE chat = ?1",
             params![chat],
         )?;
         Ok(Removed { existed, media })
@@ -2238,6 +2238,7 @@ impl Archive {
             "polls",
             "poll_history",
             "local_chat_labels",
+            "local_message_followups",
             "drafts",
             "stars",
         ] {
@@ -2882,7 +2883,7 @@ impl Archive {
     /// Clears all archived data during unlinking.
     pub fn clear(&self) -> Result<()> {
         self.connection.execute_batch(
-            "DELETE FROM poll_history; DELETE FROM poll_votes; DELETE FROM polls; DELETE FROM group_receipts; DELETE FROM messages; DELETE FROM stars; DELETE FROM motion_clips; DELETE FROM chats; DELETE FROM chat_removals; DELETE FROM message_removals; DELETE FROM pending_message_removals; DELETE FROM contacts; DELETE FROM meta; DELETE FROM lids; DELETE FROM drafts; DELETE FROM local_chat_labels; DELETE FROM local_chat_followups; DELETE FROM local_labels; DELETE FROM removed_recent_stickers; DELETE FROM favorite_stickers; DELETE FROM favorites; DELETE FROM favorite_changes;",
+            "DELETE FROM poll_history; DELETE FROM poll_votes; DELETE FROM polls; DELETE FROM group_receipts; DELETE FROM messages; DELETE FROM stars; DELETE FROM motion_clips; DELETE FROM chats; DELETE FROM chat_removals; DELETE FROM message_removals; DELETE FROM pending_message_removals; DELETE FROM contacts; DELETE FROM meta; DELETE FROM lids; DELETE FROM drafts; DELETE FROM local_chat_labels; DELETE FROM local_message_followups; DELETE FROM local_labels; DELETE FROM removed_recent_stickers; DELETE FROM favorite_stickers; DELETE FROM favorites; DELETE FROM favorite_changes;",
         )
     }
 }

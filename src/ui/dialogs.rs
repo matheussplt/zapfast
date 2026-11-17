@@ -72,7 +72,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     420.0_f32.min((ui.ctx().content_rect().width() - 64.0).max(180.0))
                 }
                 Dialog::Labels => 460.0,
-                Dialog::LocalFollowup(_) => 420.0,
+                Dialog::LocalFollowup { .. } => 420.0,
                 Dialog::AddGroupMembers(_) => 420.0,
                 Dialog::ConfirmResetInviteLink(_) | Dialog::ConfirmRemoveMember { .. } => 380.0,
             });
@@ -89,7 +89,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     button,
                 } => interactive_list(app, ui, &chat, &message, button),
                 Dialog::Labels => super::labels::manager(app, ui, &palette),
-                Dialog::LocalFollowup(chat) => local_followup(app, ui, &chat),
+                Dialog::LocalFollowup { chat, message } => local_followup(app, ui, &chat, &message),
                 Dialog::Shortcuts => shortcuts(app, ui),
                 Dialog::About => about(app, ui),
                 Dialog::ConfirmUnlink => confirm_unlink(app, ui),
@@ -161,9 +161,10 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     }
 }
 
-fn local_followup(app: &mut App, ui: &mut egui::Ui, chat: &str) {
-    ui.heading("Private follow-up");
-    ui.label("This note and reminder stay on this computer.");
+fn local_followup(app: &mut App, ui: &mut egui::Ui, chat: &str, message: &str) {
+    ui.heading("Message follow-up");
+    ui.label("This request stays on this computer and belongs to this message.");
+    ui.checkbox(&mut app.followup_done, "Done");
     ui.label("Short note");
     ui.add(egui::TextEdit::multiline(&mut app.followup_note).desired_rows(3));
     ui.label("Remind me");
@@ -192,8 +193,10 @@ fn local_followup(app: &mut App, ui: &mut egui::Ui, chat: &str) {
         if ui.button("Save").clicked() {
             app.actions.push(Action::SetLocalFollowup {
                 chat: chat.to_owned(),
+                message: message.to_owned(),
                 note: app.followup_note.clone(),
                 remind_at: app.followup_remind_at,
+                done: app.followup_done,
             });
             app.actions.push(Action::CloseDialog);
         }

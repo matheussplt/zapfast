@@ -682,7 +682,6 @@ fn header(app: &mut App, ui: &mut egui::Ui, chat: &Chat) -> Rect {
                         crate::i18n::gettext(app.locale, "Archive")
                     };
                     let export_label = crate::i18n::gettext(app.locale, "Export chat…");
-                    let followup_label = "Private note and reminder…";
                     let clear_label = crate::i18n::gettext(app.locale, "Clear chat");
                     let copy_number_label = crate::i18n::gettext(app.locale, "Copy number");
                     let close_label = crate::i18n::gettext(app.locale, "Close chat");
@@ -701,7 +700,6 @@ fn header(app: &mut App, ui: &mut egui::Ui, chat: &Chat) -> Rect {
                             archive_label.as_ref(),
                             clear_label.as_ref(),
                             export_label.as_ref(),
-                            followup_label,
                             leave_label.as_ref(),
                             copy_number_label.as_ref(),
                             close_label.as_ref(),
@@ -796,11 +794,6 @@ fn header(app: &mut App, ui: &mut egui::Ui, chat: &Chat) -> Rect {
                                     chat: chat.id.clone(),
                                     include_media: false,
                                 }));
-                            }
-                            if widgets::menu_item(ui, &palette, Some(Icon::Bell), followup_label) {
-                                app.actions.push(Action::ShowDialog(Dialog::LocalFollowup(
-                                    chat.id.clone(),
-                                )));
                             }
                             super::blocking::menu(app, ui, &chat.id);
                             // Clearing reaches the phone, so it waits for a
@@ -2658,6 +2651,7 @@ struct View<'a> {
     open_menu: Option<&'a str>,
     /// Ids of the starred messages of this chat, for the mark in the footer.
     starred: Option<&'a HashSet<String>>,
+    followups: Option<&'a HashMap<String, crate::model::LocalFollowup>>,
     /// Ids of this chat's pinned messages, for the menu and the bubble mark.
     pins: Option<&'a HashSet<String>>,
     /// Active pins of this chat, for the notices in the transcript.
@@ -3117,6 +3111,7 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat, under: f32) {
             .filter(|(menu_chat, _)| *menu_chat == chat.id)
             .map(|(_, message)| message.as_str()),
         starred: app.stars.get(&chat.id),
+        followups: app.followups.get(&chat.id),
         pins: app.pins.get(&chat.id),
         pin_notices: app
             .chat_pins
@@ -7130,6 +7125,7 @@ pub(crate) fn list_menu(
         selecting: false,
         motion_playing: None,
         starred: marks.starred.then_some(&stars),
+        followups: app.followups.get(&chat.id),
         pins: app.pins.get(&message.chat),
         pin_notices: &[],
     };
@@ -7399,6 +7395,18 @@ fn context_menu(
             message: message.id.clone(),
             starred: !starred,
         });
+        ui.close();
+    }
+    let followup_label = match view.followups.and_then(|items| items.get(&message.id)) {
+        Some(request) if request.done => "Follow-up: done…",
+        Some(_) => "Follow-up: pending…",
+        None => "Add follow-up…",
+    };
+    if item(ui, Icon::Bell, followup_label) {
+        actions.push(Action::ShowDialog(Dialog::LocalFollowup {
+            chat: chat.clone(),
+            message: message.id.clone(),
+        }));
         ui.close();
     }
     let pinned = view.pins.is_some_and(|ids| ids.contains(&message.id));
@@ -12850,6 +12858,7 @@ mod tests {
             selecting: false,
             motion_playing: None,
             starred: None,
+            followups: None,
             pins: None,
             pin_notices: &[],
         };

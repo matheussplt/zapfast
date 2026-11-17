@@ -497,9 +497,12 @@ pub enum Command {
     /// Saves a private note and reminder without contacting WhatsApp.
     SetLocalFollowup {
         chat: ChatId,
+        message: String,
         note: String,
         remind_at: Option<i64>,
+        done: bool,
     },
+    LoadLocalFollowups(ChatId),
     /// Normalizes, encodes, and sends mono 48 kHz push-to-talk audio.
     SendVoice {
         chat: ChatId,
@@ -1283,6 +1286,10 @@ pub enum Event {
         items: Vec<crate::model::MediaItem>,
     },
     ChatUpdated(Box<Chat>),
+    LocalFollowups {
+        chat: ChatId,
+        items: Vec<(String, crate::model::LocalFollowup)>,
+    },
     /// Active pins of one chat, for the line under its header.
     Pins {
         chat: ChatId,

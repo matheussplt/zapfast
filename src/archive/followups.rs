@@ -1,49 +1,81 @@
-//! Private follow-ups. These rows are never sent to WhatsApp or another device.
+//! Private follow-ups keyed to individual messages, never sent to WhatsApp.
 
-use rusqlite::{OptionalExtension, params};
+use rusqlite::params;
 
 use super::{Archive, Result};
-use crate::model::LocalFollowup;
+use crate::model::{FollowupSummary, LocalFollowup};
 
 pub const SCHEMA: &str = "
-CREATE TABLE IF NOT EXISTS local_chat_followups (
-    chat TEXT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS local_message_followups (
+    chat TEXT NOT NULL,
+    id TEXT NOT NULL,
     note TEXT NOT NULL DEFAULT '',
-    remind_at INTEGER
+    remind_at INTEGER,
+    done INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (chat, id)
 );
+CREATE INDEX IF NOT EXISTS local_followups_pending ON local_message_followups (chat, done, remind_at);
+CREATE TRIGGER IF NOT EXISTS delete_local_message_followup AFTER DELETE ON messages BEGIN
+    DELETE FROM local_message_followups WHERE chat = OLD.chat AND id = OLD.id;
+END;
 ";
 
-/// A short working note, rather than a second message archive.
 const NOTE_LIMIT: usize = 500;
 
 impl Archive {
-    pub fn local_followup(&self, chat: &str) -> Result<LocalFollowup> {
-        Ok(self
-            .connection
-            .query_row(
-                "SELECT note, remind_at FROM local_chat_followups WHERE chat = ?1",
-                [chat],
-                |row| {
-                    Ok(LocalFollowup {
-                        note: row.get(0)?,
-                        remind_at: row.get(1)?,
-                    })
-                },
-            )
-            .optional()?
-            .unwrap_or_default())
+    pub fn local_followups(&self, chat: &str) -> Result<Vec<(String, LocalFollowup)>> {
+        let mut query = self.connection.prepare(
+            "SELECT id, note, remind_at, done FROM local_message_followups WHERE chat = ?1",
+        )?;
+        query
+            .query_map([chat], |row| {
+                Ok((
+                    row.get(0)?,
+                    LocalFollowup {
+                        note: row.get(1)?,
+                        remind_at: row.get(2)?,
+                        done: row.get(3)?,
+                    },
+                ))
+            })?
+            .collect()
     }
 
-    pub fn set_local_followup(&self, chat: &str, note: &str, remind_at: Option<i64>) -> Result<()> {
+    pub fn local_followup_summary(&self, chat: &str) -> Result<FollowupSummary> {
+        self.connection.query_row(
+            "SELECT COUNT(*), MIN(remind_at) FROM local_message_followups
+             WHERE chat = ?1 AND done = 0",
+            [chat],
+            |row| {
+                Ok(FollowupSummary {
+                    pending: row.get(0)?,
+                    next_due: row.get(1)?,
+                })
+            },
+        )
+    }
+
+    pub fn set_local_followup(
+        &self,
+        chat: &str,
+        id: &str,
+        note: &str,
+        remind_at: Option<i64>,
+        done: bool,
+    ) -> Result<()> {
         let note: String = note.trim().chars().take(NOTE_LIMIT).collect();
-        if note.is_empty() && remind_at.is_none() {
-            self.connection
-                .execute("DELETE FROM local_chat_followups WHERE chat = ?1", [chat])?;
+        if note.is_empty() && remind_at.is_none() && !done {
+            self.connection.execute(
+                "DELETE FROM local_message_followups WHERE chat = ?1 AND id = ?2",
+                params![chat, id],
+            )?;
         } else {
             self.connection.execute(
-                "INSERT INTO local_chat_followups (chat, note, remind_at) VALUES (?1, ?2, ?3)
-                 ON CONFLICT(chat) DO UPDATE SET note = excluded.note, remind_at = excluded.remind_at",
-                params![chat, note, remind_at],
+                "INSERT INTO local_message_followups (chat, id, note, remind_at, done)
+                 VALUES (?1, ?2, ?3, ?4, ?5)
+                 ON CONFLICT(chat, id) DO UPDATE SET note = excluded.note,
+                 remind_at = excluded.remind_at, done = excluded.done",
+                params![chat, id, note, remind_at, done],
             )?;
         }
         Ok(())
@@ -55,26 +87,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn followup_round_trip_and_clear() {
+    fn independent_requests_in_one_group() {
         let archive = Archive::in_memory().unwrap();
-        assert_eq!(
-            archive.local_followup("chat").unwrap(),
-            LocalFollowup::default()
-        );
         archive
-            .set_local_followup("chat", "  Call back  ", Some(123))
+            .set_local_followup("group", "a", "First", Some(100), false)
             .unwrap();
-        assert_eq!(
-            archive.local_followup("chat").unwrap(),
-            LocalFollowup {
-                note: "Call back".into(),
-                remind_at: Some(123),
-            }
-        );
-        archive.set_local_followup("chat", "", None).unwrap();
-        assert_eq!(
-            archive.local_followup("chat").unwrap(),
-            LocalFollowup::default()
-        );
+        archive
+            .set_local_followup("group", "b", "Second", Some(200), false)
+            .unwrap();
+        assert_eq!(archive.local_followups("group").unwrap().len(), 2);
+        assert_eq!(archive.local_followup_summary("group").unwrap().pending, 2);
+        archive
+            .set_local_followup("group", "a", "First", Some(100), true)
+            .unwrap();
+        let summary = archive.local_followup_summary("group").unwrap();
+        assert_eq!(summary.pending, 1);
+        assert_eq!(summary.next_due, Some(200));
+        archive
+            .set_local_followup("group", "b", "", None, false)
+            .unwrap();
+        assert_eq!(archive.local_followups("group").unwrap().len(), 1);
     }
 }
