@@ -783,6 +783,7 @@ pub struct App {
     pub followup_note: String,
     pub followup_remind_at: Option<i64>,
     pub followup_done: bool,
+    pub followup_dirty: bool,
     /// Chats opened from the Unread list, kept there until the filter changes.
     unread_kept: HashSet<ChatId>,
     pub toasts: Vec<Toast>,
@@ -1723,6 +1724,7 @@ impl App {
             followup_note: String::new(),
             followup_remind_at: None,
             followup_done: false,
+            followup_dirty: false,
             unread_kept: HashSet::new(),
             toasts: Vec::new(),
             actions: Vec::new(),
@@ -3955,7 +3957,7 @@ impl App {
                     };
                     self.followups
                         .insert(chat.clone(), items.into_iter().collect());
-                    if let Some(message) = editing {
+                    if let Some(message) = editing.filter(|_| !self.followup_dirty) {
                         let current = self
                             .followups
                             .get(&chat)
@@ -9141,6 +9143,7 @@ impl App {
                     self.followup_note = followup.note;
                     self.followup_remind_at = followup.remind_at;
                     self.followup_done = followup.done;
+                    self.followup_dirty = false;
                     self.backend.send(Command::LoadLocalFollowups(chat.clone()));
                 }
                 if dialog == Dialog::BlockedContacts {

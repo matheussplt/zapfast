@@ -164,23 +164,29 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
 fn local_followup(app: &mut App, ui: &mut egui::Ui, chat: &str, message: &str) {
     ui.heading("Message follow-up");
     ui.label("This request stays on this computer and belongs to this message.");
-    ui.checkbox(&mut app.followup_done, "Done");
+    app.followup_dirty |= ui.checkbox(&mut app.followup_done, "Done").changed();
     ui.label("Short note");
-    ui.add(egui::TextEdit::multiline(&mut app.followup_note).desired_rows(3));
+    app.followup_dirty |= ui
+        .add(egui::TextEdit::multiline(&mut app.followup_note).desired_rows(3))
+        .changed();
     ui.label("Remind me");
     let now = crate::util::now();
     ui.horizontal_wrapped(|ui| {
         if ui.button("None").clicked() {
             app.followup_remind_at = None;
+            app.followup_dirty = true;
         }
         if ui.button("In 1 hour").clicked() {
             app.followup_remind_at = Some(now + 3600);
+            app.followup_dirty = true;
         }
         if ui.button("In 1 day").clicked() {
             app.followup_remind_at = Some(now + 86400);
+            app.followup_dirty = true;
         }
         if ui.button("In 3 days").clicked() {
             app.followup_remind_at = Some(now + 259200);
+            app.followup_dirty = true;
         }
     });
     if let Some(at) = app.followup_remind_at {
