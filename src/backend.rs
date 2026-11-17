@@ -501,6 +501,7 @@ pub enum Command {
         note: String,
         remind_at: Option<i64>,
         done: bool,
+        remove: bool,
     },
     LoadLocalFollowups(ChatId),
     /// Normalizes, encodes, and sends mono 48 kHz push-to-talk audio.

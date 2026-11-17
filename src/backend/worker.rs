@@ -8809,9 +8809,10 @@ impl Worker {
                 note,
                 remind_at,
                 done,
+                remove,
             } => match self
                 .archive
-                .set_local_followup(&chat, &message, &note, remind_at, done)
+                .set_local_followup(&chat, &message, &note, remind_at, done, remove)
             {
                 Ok(()) => {
                     self.emit_chat(&chat);

@@ -197,6 +197,18 @@ fn local_followup(app: &mut App, ui: &mut egui::Ui, chat: &str, message: &str) {
                 note: app.followup_note.clone(),
                 remind_at: app.followup_remind_at,
                 done: app.followup_done,
+                remove: false,
+            });
+            app.actions.push(Action::CloseDialog);
+        }
+        if ui.button("Remove request").clicked() {
+            app.actions.push(Action::SetLocalFollowup {
+                chat: chat.to_owned(),
+                message: message.to_owned(),
+                note: String::new(),
+                remind_at: None,
+                done: false,
+                remove: true,
             });
             app.actions.push(Action::CloseDialog);
         }

@@ -3226,6 +3226,7 @@ pub enum Action {
         note: String,
         remind_at: Option<i64>,
         done: bool,
+        remove: bool,
     },
     /// Creates a label from the name and colour in the manager dialog.
     CreateLabel {

@@ -1,0 +1,71 @@
+name: ZapFast DAP Windows installer
+
+on:
+  push:
+    branches: [codex/local-followups-20261116]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      ZAPFAST_DAP_VARIANT: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0'
+      - uses: jdx/mr-boxington-action@v1
+        with:
+          cache-generation: dap-installer-v1
+      - name: Test individual requests
+        run: |
+          mbx test --locked --lib archive::followups
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          mbx test --locked --lib dap_variant_
+      - name: Build personal Windows application
+        run: mbx build --release --locked
+      - name: Install WiX
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add --global WixToolset.Util.wixext/5.0.2
+          "$env:USERPROFILE\.dotnet\tools" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+      - name: Build MSI with existing recipe
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist\zapfast-dap | Out-Null
+          Copy-Item target\release\zapfast.exe dist\zapfast-dap\zapfast-dap.exe
+          Copy-Item README.md, LICENSE, THIRD-PARTY-NOTICES.md dist\zapfast-dap
+          $env:ZAPFAST_DAP_VARIANT = '1'
+          ruby packaging/windows/msi.rb dist/zapfast-dap dist/ZapFast-DAP-x64.msi 0.21.2 x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install, launch and remove without touching the original
+        shell: pwsh
+        run: |
+          $original = Join-Path $env:LOCALAPPDATA 'Programs\ZapFast'
+          New-Item -ItemType Directory -Force $original | Out-Null
+          Set-Content -LiteralPath (Join-Path $original 'sentinel.txt') -Value 'original untouched'
+          $msi = (Resolve-Path dist\ZapFast-DAP-x64.msi).Path
+          $process = Start-Process msiexec.exe -ArgumentList @('/i', ('"' + $msi + '"'), '/qn', '/norestart') -Wait -PassThru -WindowStyle Hidden
+          if ($process.ExitCode -ne 0) { throw "MSI install failed: $($process.ExitCode)" }
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\ZapFast DAP\zapfast-dap.exe'
+          if (!(Test-Path -LiteralPath $exe)) { throw 'DAP executable missing' }
+          & $exe --version
+          if ($LASTEXITCODE -ne 0) { throw 'DAP executable did not start' }
+          if ((Get-Content -LiteralPath (Join-Path $original 'sentinel.txt')) -ne 'original untouched') { throw 'Original install changed' }
+          $process = Start-Process msiexec.exe -ArgumentList @('/x', ('"' + $msi + '"'), '/qn', '/norestart') -Wait -PassThru -WindowStyle Hidden
+          if ($process.ExitCode -ne 0) { throw "MSI uninstall failed: $($process.ExitCode)" }
+          if ((Get-Content -LiteralPath (Join-Path $original 'sentinel.txt')) -ne 'original untouched') { throw 'Original install changed on uninstall' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZapFast-DAP-Windows-installer
+          path: dist/ZapFast-DAP-x64.msi
+          retention-days: 7

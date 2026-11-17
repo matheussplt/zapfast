@@ -19,7 +19,7 @@ abort "#{package} already exists" if File.exist?(package)
 # Windows Installer versions are numeric: 1.2.3-beta.1 installs as 1.2.3.
 numeric = version.split("-").first
 success = system(
-  "wix", "build", File.join(__dir__, "zapfast.wxs"),
+  "wix", "build", File.join(__dir__, ENV["ZAPFAST_DAP_VARIANT"] == "1" ? "zapfast-dap.wxs" : "zapfast.wxs"),
   "-arch", arch,
   "-ext", "WixToolset.Util.wixext",
   "-d", "Version=#{numeric}",

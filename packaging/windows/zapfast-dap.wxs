@@ -1,0 +1,63 @@
+<!-- Independent per-user package. No original ZapFast files, registry keys or sessions are touched. -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+  xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+  <Package Name="ZapFast DAP" Manufacturer="Matheus Ribeiro"
+    Version="$(Version)" UpgradeCode="{539A037C-DFC1-439C-AB0B-400F0B3FA63E}"
+    Scope="perUser" Compressed="yes" Language="1033">
+    <SummaryInformation Description="ZapFast DAP personal build" Manufacturer="Matheus Ribeiro" />
+    <MajorUpgrade Schedule="afterInstallInitialize" AllowSameVersionUpgrades="yes"
+      DowngradeErrorMessage="A newer ZapFast DAP version is installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <Icon Id="ZapFastDapIcon" SourceFile="$(sys.SOURCEFILEDIR)zapfast.ico" />
+    <Property Id="ARPPRODUCTICON" Value="ZapFastDapIcon" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="ZapFast DAP" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+    <ComponentGroup Id="Program" Directory="INSTALLFOLDER">
+      <Component Id="Program" Guid="{28EAB46F-85E1-4004-97CF-1112A9DFC96E}">
+        <File Id="ZapFastDapExe" Name="zapfast-dap.exe"
+          Source="$(SourceDir)\zapfast-dap.exe" KeyPath="no" />
+        <RegistryValue Root="HKCU" Key="Software\ZapFastDAP" Name="InstallFolder"
+          Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+        <RemoveFolder Id="RemoveInstallFolder" On="uninstall" />
+      </Component>
+      <Component Id="Documents" Guid="{DB233078-681A-41BA-8C0B-E574C4162A1C}">
+        <File Id="Readme" Name="README.md" Source="$(SourceDir)\README.md" KeyPath="no" />
+        <File Id="License" Name="LICENSE" Source="$(SourceDir)\LICENSE" KeyPath="no" />
+        <File Id="Notices" Name="THIRD-PARTY-NOTICES.md"
+          Source="$(SourceDir)\THIRD-PARTY-NOTICES.md" KeyPath="no" />
+        <RegistryValue Root="HKCU" Key="Software\ZapFastDAP" Name="Documents"
+          Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+    <ComponentGroup Id="Shortcuts">
+      <Component Id="StartMenuShortcut" Guid="{D7911F87-8ECD-4916-9534-53FDE6F7FD6B}"
+        Directory="ProgramMenuFolder">
+        <Shortcut Id="ZapFastDapShortcut" Name="ZapFast DAP"
+          Description="Private message follow-ups"
+          Target="[#ZapFastDapExe]" WorkingDirectory="INSTALLFOLDER">
+          <ShortcutProperty Key="System.AppUserModel.ID" Value="me.paolino.zapfast-dap" />
+        </Shortcut>
+        <RegistryValue Root="HKCU" Key="Software\ZapFastDAP" Name="StartMenuShortcut"
+          Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+    <Feature Id="Main" Title="ZapFast DAP" AllowAbsent="no">
+      <ComponentGroupRef Id="Program" />
+      <ComponentGroupRef Id="Shortcuts" />
+    </Feature>
+    <util:CloseApplication Id="ZapFastDapRunning" Target="zapfast-dap.exe"
+      Property="ZAPFASTDAPRUNNING" RebootPrompt="no" />
+    <CustomAction Id="RefuseWhileRunning"
+      Error="ZapFast DAP is running. Quit it, then try again." />
+    <InstallExecuteSequence>
+      <Custom Action="RefuseWhileRunning" After="Wix4CloseApplications_$(sys.BUILDARCHSHORT)"
+        Condition="ZAPFASTDAPRUNNING" />
+    </InstallExecuteSequence>
+  </Package>
+</Wix>

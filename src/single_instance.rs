@@ -17,7 +17,11 @@ use std::time::{Duration, Instant};
 /// Stable wire identity shared with FastsApp so upgrades surface a running
 /// older copy before migrating its session files. On the wire every request
 /// and reply starts with `fastsapp:`.
-const NAME: &str = "fastsapp";
+const NAME: &str = if option_env!("ZAPFAST_DAP_VARIANT").is_some() {
+    "zapfast-dap"
+} else {
+    "fastsapp"
+};
 const PREFIX: &str = "fastsapp:";
 /// What ZapFast answers a request it takes: `fastsapp:ok` on the wire.
 const OK: &str = "ok";
@@ -213,6 +217,9 @@ fn sent(result: std::io::Result<()>, legacy: impl FnOnce() -> bool) -> Sent {
 /// Unlike [`legacy_instance_answers`], a port held by something that does
 /// not answer as ZapFast counts as no copy.
 fn legacy_instance_answers_ping() -> bool {
+    if option_env!("ZAPFAST_DAP_VARIANT").is_some() {
+        return false;
+    }
     if TcpListener::bind((Ipv4Addr::LOCALHOST, LEGACY_PORT)).is_ok() {
         return false;
     }
@@ -246,6 +253,9 @@ fn parse(verb: &str) -> Option<ControlCommand> {
 
 /// Asks a running copy that predates the lock to handle `verb`.
 fn legacy_instance_answers(verb: &str) -> bool {
+    if option_env!("ZAPFAST_DAP_VARIANT").is_some() {
+        return false;
+    }
     // The port is free, and released at once, when no older copy runs.
     if TcpListener::bind((Ipv4Addr::LOCALHOST, LEGACY_PORT)).is_ok() {
         return false;
@@ -353,6 +363,14 @@ fn read_legacy_line(stream: &mut TcpStream) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dap_variant_has_separate_instance_slot() {
+        if option_env!("ZAPFAST_DAP_VARIANT").is_some() {
+            assert_eq!(NAME, "zapfast-dap");
+            assert!(!legacy_instance_answers_ping());
+        }
+    }
 
     #[test]
     fn only_our_own_verbs_are_understood() {

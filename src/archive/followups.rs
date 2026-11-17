@@ -62,9 +62,10 @@ impl Archive {
         note: &str,
         remind_at: Option<i64>,
         done: bool,
+        remove: bool,
     ) -> Result<()> {
         let note: String = note.trim().chars().take(NOTE_LIMIT).collect();
-        if note.is_empty() && remind_at.is_none() && !done {
+        if remove {
             self.connection.execute(
                 "DELETE FROM local_message_followups WHERE chat = ?1 AND id = ?2",
                 params![chat, id],
@@ -90,22 +91,61 @@ mod tests {
     fn independent_requests_in_one_group() {
         let archive = Archive::in_memory().unwrap();
         archive
-            .set_local_followup("group", "a", "First", Some(100), false)
+            .set_local_followup("group", "blank", "", None, false, false)
+            .unwrap();
+        assert_eq!(archive.local_followup_summary("group").unwrap().pending, 1);
+        archive
+            .set_local_followup("group", "a", "First", Some(100), false, false)
             .unwrap();
         archive
-            .set_local_followup("group", "b", "Second", Some(200), false)
+            .set_local_followup("group", "b", "Second", Some(200), false, false)
             .unwrap();
-        assert_eq!(archive.local_followups("group").unwrap().len(), 2);
-        assert_eq!(archive.local_followup_summary("group").unwrap().pending, 2);
+        assert_eq!(archive.local_followups("group").unwrap().len(), 3);
+        assert_eq!(archive.local_followup_summary("group").unwrap().pending, 3);
         archive
-            .set_local_followup("group", "a", "First", Some(100), true)
+            .set_local_followup("group", "a", "First", Some(100), true, false)
             .unwrap();
         let summary = archive.local_followup_summary("group").unwrap();
-        assert_eq!(summary.pending, 1);
+        assert_eq!(summary.pending, 2);
         assert_eq!(summary.next_due, Some(200));
         archive
-            .set_local_followup("group", "b", "", None, false)
+            .set_local_followup("group", "b", "", None, false, true)
             .unwrap();
-        assert_eq!(archive.local_followups("group").unwrap().len(), 1);
+        assert_eq!(archive.local_followups("group").unwrap().len(), 2);
+        archive
+            .set_local_followup("other", "a", "Different chat", None, false, false)
+            .unwrap();
+        assert_eq!(archive.local_followups("other").unwrap().len(), 1);
+        assert!(
+            archive
+                .local_followups("group")
+                .unwrap()
+                .iter()
+                .any(|(_, request)| request.note == "First")
+        );
+    }
+
+    #[test]
+    fn deleting_a_message_clears_its_request() {
+        let archive = Archive::in_memory().unwrap();
+        archive
+            .connection
+            .execute(
+                "INSERT INTO messages (chat, id, sender, from_me, timestamp, content)
+             VALUES ('group', 'm1', 'sender', 0, 1, '{}')",
+                [],
+            )
+            .unwrap();
+        archive
+            .set_local_followup("group", "m1", "Call back", Some(123), false, false)
+            .unwrap();
+        archive
+            .connection
+            .execute(
+                "DELETE FROM messages WHERE chat = 'group' AND id = 'm1'",
+                [],
+            )
+            .unwrap();
+        assert!(archive.local_followups("group").unwrap().is_empty());
     }
 }

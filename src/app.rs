@@ -3983,6 +3983,9 @@ impl App {
                 {
                     self.backend.send(Command::LoadCallLog);
                 }
+                if live {
+                    self.backend.send(Command::LoadLocalFollowups(chat.clone()));
+                }
                 let conversation = self.conversations.entry(chat.clone()).or_default();
                 let was_empty = conversation.messages.is_empty();
                 let messages_empty = messages.is_empty();
@@ -3990,9 +3993,6 @@ impl App {
                     conversation.phone_delivered = true;
                 }
                 conversation.merge(messages, older);
-                if live {
-                    self.backend.send(Command::LoadLocalFollowups(chat.clone()));
-                }
                 if older {
                     conversation.loading_older = false;
                     conversation.complete = complete;
@@ -7019,7 +7019,8 @@ impl App {
         self.toasts.retain(|toast| {
             toast.kind == ToastKind::Error || toast.created.elapsed() < INFO_TOAST_LIFETIME
         });
-        if self.settings.check_for_updates
+        if option_env!("ZAPFAST_DAP_VARIANT").is_none()
+            && self.settings.check_for_updates
             && !self.backend.is_offline()
             && self
                 .last_update_check
@@ -9369,6 +9370,7 @@ impl App {
                 note,
                 remind_at,
                 done,
+                remove,
             } => {
                 self.backend.send(Command::SetLocalFollowup {
                     chat,
@@ -9376,6 +9378,7 @@ impl App {
                     note,
                     remind_at,
                     done,
+                    remove,
                 });
             }
             Action::CreateLabel { name, color_hex } => {

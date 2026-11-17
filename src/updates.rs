@@ -36,6 +36,9 @@ pub const CONFIG: UpdateConfig = UpdateConfig {
 
 /// An updater on the proxy-aware reqwest client.
 pub fn updater() -> anyhow::Result<Updater> {
+    if option_env!("ZAPFAST_DAP_VARIANT").is_some() {
+        anyhow::bail!("The DAP variant is updated only by its separate installer");
+    }
     let mut builder = reqwest::blocking::Client::builder();
     if let Some(proxy) = crate::proxy::reqwest_proxy() {
         builder = builder.proxy(proxy);
@@ -46,6 +49,13 @@ pub fn updater() -> anyhow::Result<Updater> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dap_variant_cannot_replace_itself_with_official_release() {
+        if option_env!("ZAPFAST_DAP_VARIANT").is_some() {
+            assert!(updater().is_err());
+        }
+    }
 
     #[test]
     fn update_config_is_valid() {
