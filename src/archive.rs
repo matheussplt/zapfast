@@ -20,6 +20,7 @@ mod drafts;
 mod encryption;
 pub use encryption::{archive_key_identity, copy_archive_key, forget_archive_key};
 mod favorites;
+mod followups;
 pub use favorites::Favorite;
 mod labels;
 pub use labels::{DEFAULT_COLOR, LABEL_LIMIT, NAME_LIMIT};
@@ -325,6 +326,7 @@ fn chat_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Chat> {
         participants: serde_json::from_str(&participants).unwrap_or_default(),
         read_only: row.get(14)?,
         labels: Vec::new(),
+        followup: Default::default(),
         ephemeral_expiration: row.get::<_, Option<u32>>(16)?,
         unread_mention: None,
         notification_sound: row
@@ -490,6 +492,7 @@ impl Archive {
         connection.execute_batch("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;")?;
         connection.execute_batch(SCHEMA)?;
         connection.execute_batch(labels::SCHEMA)?;
+        connection.execute_batch(followups::SCHEMA)?;
         connection.execute_batch(polls::SCHEMA)?;
         connection.execute_batch(drafts::SCHEMA)?;
         connection.execute_batch(stickers::SCHEMA)?;
@@ -2204,6 +2207,10 @@ impl Archive {
             .execute("DELETE FROM chats WHERE id = ?1", params![chat])?
             > 0;
         self.purge_chat_rows(chat)?;
+        self.connection.execute(
+            "DELETE FROM local_message_followups WHERE chat = ?1",
+            params![chat],
+        )?;
         Ok(Removed { existed, media })
     }
 
@@ -2231,6 +2238,7 @@ impl Archive {
             "polls",
             "poll_history",
             "local_chat_labels",
+            "local_message_followups",
             "drafts",
             "stars",
         ] {
@@ -2875,7 +2883,7 @@ impl Archive {
     /// Clears all archived data during unlinking.
     pub fn clear(&self) -> Result<()> {
         self.connection.execute_batch(
-            "DELETE FROM poll_history; DELETE FROM poll_votes; DELETE FROM polls; DELETE FROM group_receipts; DELETE FROM messages; DELETE FROM stars; DELETE FROM motion_clips; DELETE FROM chats; DELETE FROM chat_removals; DELETE FROM message_removals; DELETE FROM pending_message_removals; DELETE FROM contacts; DELETE FROM meta; DELETE FROM lids; DELETE FROM drafts; DELETE FROM local_chat_labels; DELETE FROM local_labels; DELETE FROM removed_recent_stickers; DELETE FROM favorite_stickers; DELETE FROM favorites; DELETE FROM favorite_changes;",
+            "DELETE FROM poll_history; DELETE FROM poll_votes; DELETE FROM polls; DELETE FROM group_receipts; DELETE FROM messages; DELETE FROM stars; DELETE FROM motion_clips; DELETE FROM chats; DELETE FROM chat_removals; DELETE FROM message_removals; DELETE FROM pending_message_removals; DELETE FROM contacts; DELETE FROM meta; DELETE FROM lids; DELETE FROM drafts; DELETE FROM local_chat_labels; DELETE FROM local_message_followups; DELETE FROM local_labels; DELETE FROM removed_recent_stickers; DELETE FROM favorite_stickers; DELETE FROM favorites; DELETE FROM favorite_changes;",
         )
     }
 }

@@ -20,15 +20,20 @@ pub struct AppDirs {
 
 impl AppDirs {
     pub fn discover() -> Self {
-        match Self::of("zapfast") {
+        let name = if option_env!("ZAPFAST_DAP_VARIANT").is_some() {
+            "zapfast-dap"
+        } else {
+            "zapfast"
+        };
+        match Self::of(name) {
             Some(dirs) => dirs,
             None => {
                 let fallback = std::env::current_dir().unwrap_or_default();
                 Self {
-                    config: fallback.join("zapfast-config"),
-                    state: fallback.join("zapfast-state"),
-                    cache: fallback.join("zapfast-cache"),
-                    runtime: fallback.join("zapfast-run"),
+                    config: fallback.join(format!("{name}-config")),
+                    state: fallback.join(format!("{name}-state")),
+                    cache: fallback.join(format!("{name}-cache")),
+                    runtime: fallback.join(format!("{name}-run")),
                 }
             }
         }
@@ -430,6 +435,17 @@ fn adopt_directory(from: &Path, to: &Path) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dap_variant_has_separate_session_paths() {
+        if option_env!("ZAPFAST_DAP_VARIANT").is_some() {
+            let personal = AppDirs::discover();
+            let original = AppDirs::of("zapfast").unwrap();
+            assert_ne!(personal.state, original.state);
+            assert_ne!(personal.config, original.config);
+            assert_ne!(personal.runtime, original.runtime);
+        }
+    }
 
     fn root(name: &str) -> PathBuf {
         let root =

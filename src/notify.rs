@@ -432,6 +432,8 @@ const MACOS_BUNDLE_ID: &str = "me.paolino.fastsapp";
 fn notification_app_id() -> &'static str {
     if cfg!(target_os = "macos") {
         MACOS_BUNDLE_ID
+    } else if option_env!("ZAPFAST_DAP_VARIANT").is_some() {
+        "me.paolino.zapfast-dap"
     } else {
         "me.paolino.zapfast"
     }
@@ -459,15 +461,26 @@ fn deliver(
     };
     let client = match CLIENT.get_or_init(|| {
         Client::new(
-            App::new(notification_app_id(), "ZapFast")
-                .desktop_entry("zapfast")
-                .icon("zapfast")
-                // ZapFast's green, the theme's accent, behind the logo on
-                // Windows toasts, so Windows 11's dark theme leaves it as drawn.
-                .logo(
-                    include_bytes!("../packaging/macos/icon-1024.png"),
-                    [0x00, 0xa8, 0x84],
-                ),
+            App::new(
+                notification_app_id(),
+                if option_env!("ZAPFAST_DAP_VARIANT").is_some() {
+                    "ZapFast DAP"
+                } else {
+                    "ZapFast"
+                },
+            )
+            .desktop_entry(if option_env!("ZAPFAST_DAP_VARIANT").is_some() {
+                "zapfast-dap"
+            } else {
+                "zapfast"
+            })
+            .icon("zapfast")
+            // ZapFast's green, the theme's accent, behind the logo on
+            // Windows toasts, so Windows 11's dark theme leaves it as drawn.
+            .logo(
+                include_bytes!("../packaging/macos/icon-1024.png"),
+                [0x00, 0xa8, 0x84],
+            ),
         )
     }) {
         Ok(client) => client,

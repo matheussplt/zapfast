@@ -3871,3 +3871,6 @@ msgstr ""
 #: src/a11y.rs:362
 msgid "not sent"
 msgstr ""
+msgid "Follow-up…"
+msgstr ""
+

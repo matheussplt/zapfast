@@ -1640,6 +1640,31 @@ fn row(app: &mut App, ui: &mut egui::Ui, chat: &Chat) -> egui::Response {
             Icon::Pin.image(palette.dim, 14.0).paint_at(ui, icon_rect);
             badge_right -= 20.0;
         }
+        if chat.followup.pending > 0 {
+            let due = chat.followup.next_due;
+            let color = if due.is_some_and(|at| at <= now) {
+                palette.accent
+            } else {
+                palette.dim
+            };
+            let icon_rect =
+                Rect::from_center_size(pos2(badge_right - 8.0, line_y + 8.0), Vec2::splat(15.0));
+            Icon::Bell.image(color, 15.0).paint_at(ui, icon_rect);
+            badge_right -= 20.0;
+            let count = chat.followup.pending.to_string();
+            let galley = ui
+                .painter()
+                .layout_no_wrap(count, theme::medium(10.0), color);
+            ui.painter()
+                .galley(pos2(badge_right - galley.size().x, line_y), galley, color);
+            badge_right -= 14.0;
+            if let Some(due) = due.filter(|at| *at > now) {
+                ui.ctx()
+                    .request_repaint_after(std::time::Duration::from_secs(
+                        (due - now).min(60) as u64
+                    ));
+            }
+        }
         let mut x = left;
         let typing = app.typing_in(&chat.id);
         let preview_color = if unread && !muted {

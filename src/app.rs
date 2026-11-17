@@ -779,6 +779,11 @@ pub struct App {
     pub label_editing: Option<(String, String)>,
     /// Label the chat list shows; `None` shows every chat.
     pub label_filter: Option<String>,
+    /// Unsaved private follow-up in the dialog.
+    pub followup_note: String,
+    pub followup_remind_at: Option<i64>,
+    pub followup_done: bool,
+    pub followup_dirty: bool,
     /// Chats opened from the Unread list, kept there until the filter changes.
     unread_kept: HashSet<ChatId>,
     pub toasts: Vec<Toast>,
@@ -1716,6 +1721,10 @@ impl App {
             label_color: crate::archive::DEFAULT_COLOR.to_owned(),
             label_editing: None,
             label_filter: None,
+            followup_note: String::new(),
+            followup_remind_at: None,
+            followup_done: false,
+            followup_dirty: false,
             unread_kept: HashSet::new(),
             toasts: Vec::new(),
             actions: Vec::new(),
@@ -3937,6 +3946,30 @@ impl App {
                     self.request_info_media_if_unloaded();
                 }
             }
+            Event::LocalFollowups { chat, items } => {
+                if live {
+                    let editing = match &self.dialog {
+                        Some(Dialog::LocalFollowup {
+                            chat: open,
+                            message,
+                        }) if *open == chat => Some(message.clone()),
+                        _ => None,
+                    };
+                    self.followups
+                        .insert(chat.clone(), items.into_iter().collect());
+                    if let Some(message) = editing.filter(|_| !self.followup_dirty) {
+                        let current = self
+                            .followups
+                            .get(&chat)
+                            .and_then(|items| items.get(&message))
+                            .cloned()
+                            .unwrap_or_default();
+                        self.followup_note = current.note;
+                        self.followup_remind_at = current.remind_at;
+                        self.followup_done = current.done;
+                    }
+                }
+            }
             Event::Messages {
                 chat,
                 messages,
@@ -3951,6 +3984,9 @@ impl App {
                         .any(|message| matches!(message.content, Content::Call { .. }))
                 {
                     self.backend.send(Command::LoadCallLog);
+                }
+                if live && !messages.is_empty() {
+                    self.backend.send(Command::LoadLocalFollowups(chat.clone()));
                 }
                 let conversation = self.conversations.entry(chat.clone()).or_default();
                 let was_empty = conversation.messages.is_empty();
@@ -4435,15 +4471,20 @@ impl App {
                 }
                 // A deleted message leaves the starred list.
                 self.forget_star(&chat, &id);
+                if let Some(items) = self.followups.get_mut(&chat) {
+                    items.remove(&id);
+                }
             }
             Event::ChatRemoved { chat } => {
                 self.forget_chat(&chat);
                 self.stars.remove(&chat);
+                self.followups.remove(&chat);
                 self.reload_lists();
             }
             Event::ChatCleared { chat, through } => {
                 self.handle_chat_cleared(&chat, through, live);
                 self.stars.remove(&chat);
+                self.followups.remove(&chat);
                 // Clearing the chat clears its pins in the archive too.
                 self.pins.remove(&chat);
                 self.chat_pins.remove(&chat);
@@ -5153,6 +5194,7 @@ impl App {
                 self.starred.clear();
                 self.show_starred = false;
                 self.stars.clear();
+                self.followups.clear();
                 self.pins.clear();
                 self.chat_pins.clear();
                 self.account_privacy = crate::privacy::Snapshot::default();
@@ -6979,7 +7021,8 @@ impl App {
         self.toasts.retain(|toast| {
             toast.kind == ToastKind::Error || toast.created.elapsed() < INFO_TOAST_LIFETIME
         });
-        if self.settings.check_for_updates
+        if option_env!("ZAPFAST_DAP_VARIANT").is_none()
+            && self.settings.check_for_updates
             && !self.backend.is_offline()
             && self
                 .last_update_check
@@ -9090,6 +9133,19 @@ impl App {
             Action::ShowDialog(dialog) => {
                 self.cancel_contact_dialog_request();
                 self.clear_chat_lock_entry();
+                if let Dialog::LocalFollowup { chat, message } = &dialog {
+                    let followup = self
+                        .followups
+                        .get(chat)
+                        .and_then(|items| items.get(message))
+                        .cloned()
+                        .unwrap_or_default();
+                    self.followup_note = followup.note;
+                    self.followup_remind_at = followup.remind_at;
+                    self.followup_done = followup.done;
+                    self.followup_dirty = false;
+                    self.backend.send(Command::LoadLocalFollowups(chat.clone()));
+                }
                 if dialog == Dialog::BlockedContacts {
                     self.backend.send(Command::FetchBlocklist);
                 }
@@ -9310,6 +9366,23 @@ impl App {
             Action::SelectLabel(label) => self.select_label(label),
             Action::SetChatLabels { chat, labels } => {
                 self.backend.send(Command::SetChatLabels { chat, labels });
+            }
+            Action::SetLocalFollowup {
+                chat,
+                message,
+                note,
+                remind_at,
+                done,
+                remove,
+            } => {
+                self.backend.send(Command::SetLocalFollowup {
+                    chat,
+                    message,
+                    note,
+                    remind_at,
+                    done,
+                    remove,
+                });
             }
             Action::CreateLabel { name, color_hex } => {
                 let name = name.trim().to_owned();

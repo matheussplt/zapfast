@@ -2651,6 +2651,7 @@ struct View<'a> {
     open_menu: Option<&'a str>,
     /// Ids of the starred messages of this chat, for the mark in the footer.
     starred: Option<&'a HashSet<String>>,
+    followups: Option<&'a HashMap<String, crate::model::LocalFollowup>>,
     /// Ids of this chat's pinned messages, for the menu and the bubble mark.
     pins: Option<&'a HashSet<String>>,
     /// Active pins of this chat, for the notices in the transcript.
@@ -3110,6 +3111,7 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat, under: f32) {
             .filter(|(menu_chat, _)| *menu_chat == chat.id)
             .map(|(_, message)| message.as_str()),
         starred: app.stars.get(&chat.id),
+        followups: app.followups.get(&chat.id),
         pins: app.pins.get(&chat.id),
         pin_notices: app
             .chat_pins
@@ -5006,6 +5008,45 @@ fn bubble(
             }
         },
     );
+    if let Some(request) = view.followups.and_then(|items| items.get(&message.id))
+        && let Some(bubble) = &response
+    {
+        let centre = if message.from_me {
+            pos2(bubble.rect.left() - 11.0, bubble.rect.top() + 12.0)
+        } else {
+            pos2(bubble.rect.right() + 11.0, bubble.rect.top() + 12.0)
+        };
+        let rect = Rect::from_center_size(centre, Vec2::splat(16.0));
+        let due = request.remind_at.is_some_and(|at| at <= view.now) && !request.done;
+        let color = if due {
+            view.palette.accent
+        } else {
+            view.palette.secondary
+        };
+        theme::paint_icon(
+            ui,
+            if request.done {
+                Icon::Check
+            } else {
+                Icon::Bell
+            },
+            rect,
+            14.0,
+            color,
+        );
+        let status = if request.done { "Done" } else { "Pending" };
+        ui.interact(rect, id.with("local-followup"), Sense::hover())
+            .on_hover_text(format!("{status}: {}", request.note));
+        if let Some(at) = request
+            .remind_at
+            .filter(|at| *at > view.now && !request.done)
+        {
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_secs(
+                    (at - view.now).min(60) as u64
+                ));
+        }
+    }
     response
 }
 
@@ -7030,6 +7071,7 @@ fn message_menu_labels(locale: crate::i18n::Locale) -> Vec<String> {
         gettext(locale, "Reply privately"),
         gettext(locale, "Star"),
         gettext(locale, "Unstar"),
+        gettext(locale, "Follow-up…"),
         gettext(locale, "Pin message"),
         gettext(locale, "Unpin message"),
         gettext(locale, "Forward"),
@@ -7123,6 +7165,7 @@ pub(crate) fn list_menu(
         selecting: false,
         motion_playing: None,
         starred: marks.starred.then_some(&stars),
+        followups: app.followups.get(&chat.id),
         pins: app.pins.get(&message.chat),
         pin_notices: &[],
     };
@@ -7392,6 +7435,19 @@ fn context_menu(
             message: message.id.clone(),
             starred: !starred,
         });
+        ui.close();
+    }
+    if !matches!(message.content, Content::Revoked)
+        && item(
+            ui,
+            Icon::Bell,
+            &crate::i18n::gettext(view.locale, "Follow-up…"),
+        )
+    {
+        actions.push(Action::ShowDialog(Dialog::LocalFollowup {
+            chat: chat.clone(),
+            message: message.id.clone(),
+        }));
         ui.close();
     }
     let pinned = view.pins.is_some_and(|ids| ids.contains(&message.id));
@@ -12843,6 +12899,7 @@ mod tests {
             selecting: false,
             motion_playing: None,
             starred: None,
+            followups: None,
             pins: None,
             pin_notices: &[],
         };

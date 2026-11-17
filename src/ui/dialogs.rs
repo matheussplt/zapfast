@@ -72,6 +72,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     420.0_f32.min((ui.ctx().content_rect().width() - 64.0).max(180.0))
                 }
                 Dialog::Labels => 460.0,
+                Dialog::LocalFollowup { .. } => 420.0,
                 Dialog::AddGroupMembers(_) => 420.0,
                 Dialog::ConfirmResetInviteLink(_) | Dialog::ConfirmRemoveMember { .. } => 380.0,
             });
@@ -88,6 +89,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     button,
                 } => interactive_list(app, ui, &chat, &message, button),
                 Dialog::Labels => super::labels::manager(app, ui, &palette),
+                Dialog::LocalFollowup { chat, message } => local_followup(app, ui, &chat, &message),
                 Dialog::Shortcuts => shortcuts(app, ui),
                 Dialog::About => about(app, ui),
                 Dialog::ConfirmUnlink => confirm_unlink(app, ui),
@@ -157,6 +159,69 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     if response.should_close() {
         app.actions.push(Action::CloseDialog);
     }
+}
+
+fn local_followup(app: &mut App, ui: &mut egui::Ui, chat: &str, message: &str) {
+    ui.heading("Message follow-up");
+    ui.label("This request stays on this computer and belongs to this message.");
+    app.followup_dirty |= ui.checkbox(&mut app.followup_done, "Done").changed();
+    ui.label("Short note");
+    app.followup_dirty |= ui
+        .add(egui::TextEdit::multiline(&mut app.followup_note).desired_rows(3))
+        .changed();
+    ui.label("Remind me");
+    let now = crate::util::now();
+    ui.horizontal_wrapped(|ui| {
+        if ui.button("None").clicked() {
+            app.followup_remind_at = None;
+            app.followup_dirty = true;
+        }
+        if ui.button("In 1 hour").clicked() {
+            app.followup_remind_at = Some(now + 3600);
+            app.followup_dirty = true;
+        }
+        if ui.button("In 1 day").clicked() {
+            app.followup_remind_at = Some(now + 86400);
+            app.followup_dirty = true;
+        }
+        if ui.button("In 3 days").clicked() {
+            app.followup_remind_at = Some(now + 259200);
+            app.followup_dirty = true;
+        }
+    });
+    if let Some(at) = app.followup_remind_at {
+        ui.label(format!(
+            "Selected: {}",
+            crate::util::moment_stamp(app.locale, at)
+        ));
+    }
+    ui.horizontal(|ui| {
+        if ui.button("Save").clicked() {
+            app.actions.push(Action::SetLocalFollowup {
+                chat: chat.to_owned(),
+                message: message.to_owned(),
+                note: app.followup_note.clone(),
+                remind_at: app.followup_remind_at,
+                done: app.followup_done,
+                remove: false,
+            });
+            app.actions.push(Action::CloseDialog);
+        }
+        if ui.button("Remove request").clicked() {
+            app.actions.push(Action::SetLocalFollowup {
+                chat: chat.to_owned(),
+                message: message.to_owned(),
+                note: String::new(),
+                remind_at: None,
+                done: false,
+                remove: true,
+            });
+            app.actions.push(Action::CloseDialog);
+        }
+        if ui.button("Cancel").clicked() {
+            app.actions.push(Action::CloseDialog);
+        }
+    });
 }
 
 fn interactive_list(app: &mut App, ui: &mut egui::Ui, chat: &str, message: &str, button: usize) {

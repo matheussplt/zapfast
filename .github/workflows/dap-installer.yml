@@ -1,0 +1,99 @@
+name: ZapFast DAP Windows installer
+
+on:
+  push:
+    branches: [codex/local-followups-20261116]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      ZAPFAST_DAP_VARIANT: '1'
+      OPENSSL_NO_VENDOR: '1'
+      VCPKGRS_TRIPLET: x64-windows-static-md
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0'
+      - uses: jdx/mr-boxington-action@v1
+        with:
+          cache-generation: dap-installer-v1
+      - name: Use native Windows Perl for OpenSSL
+        shell: pwsh
+        run: |
+          $perlDir = 'C:\Strawberry\perl\bin'
+          if (!(Test-Path -LiteralPath (Join-Path $perlDir 'perl.exe'))) {
+            choco install strawberryperl --no-progress -y
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          if (!(Test-Path -LiteralPath (Join-Path $perlDir 'perl.exe'))) { throw 'Native Windows Perl missing' }
+          $env:PATH = "$perlDir;$env:PATH"
+          $perlDir | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          & (Join-Path $perlDir 'perl.exe') -v
+      - name: Provide native OpenSSL through vcpkg
+        shell: pwsh
+        run: |
+          $root = $env:VCPKG_INSTALLATION_ROOT
+          if (!$root) { $root = 'C:\vcpkg' }
+          $tool = Join-Path $root 'vcpkg.exe'
+          if (!(Test-Path -LiteralPath $tool)) { throw 'vcpkg missing from Windows runner' }
+          "VCPKG_ROOT=$root" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          & $tool install openssl:x64-windows-static-md
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $library = Join-Path $root 'installed\x64-windows-static-md\lib\libcrypto.lib'
+          if (!(Test-Path -LiteralPath $library)) { throw 'Native OpenSSL library missing' }
+      - name: Test individual requests
+        run: |
+          mbx test --locked --lib archive::followups
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          mbx test --locked --lib dap_variant_
+      - name: Build personal Windows application
+        run: mbx build --release --locked
+      - name: Install WiX
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add --global WixToolset.Util.wixext/5.0.2
+          "$env:USERPROFILE\.dotnet\tools" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+      - name: Build MSI with existing recipe
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist\zapfast-dap | Out-Null
+          Copy-Item target\release\zapfast.exe dist\zapfast-dap\zapfast-dap.exe
+          Copy-Item README.md, LICENSE, THIRD-PARTY-NOTICES.md dist\zapfast-dap
+          $env:ZAPFAST_DAP_VARIANT = '1'
+          ruby packaging/windows/msi.rb dist/zapfast-dap dist/ZapFast-DAP-x64.msi 0.21.2 x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install, launch and remove without touching the original
+        shell: pwsh
+        run: |
+          $original = Join-Path $env:LOCALAPPDATA 'Programs\ZapFast'
+          New-Item -ItemType Directory -Force $original | Out-Null
+          Set-Content -LiteralPath (Join-Path $original 'sentinel.txt') -Value 'original untouched'
+          $msi = (Resolve-Path dist\ZapFast-DAP-x64.msi).Path
+          $process = Start-Process msiexec.exe -ArgumentList @('/i', ('"' + $msi + '"'), '/qn', '/norestart') -Wait -PassThru -WindowStyle Hidden
+          if ($process.ExitCode -ne 0) { throw "MSI install failed: $($process.ExitCode)" }
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\ZapFast DAP\zapfast-dap.exe'
+          if (!(Test-Path -LiteralPath $exe)) { throw 'DAP executable missing' }
+          $version = Start-Process -FilePath $exe -ArgumentList '--version' -Wait -PassThru -WindowStyle Hidden
+          if ($version.ExitCode -ne 0) { throw "DAP executable did not start: $($version.ExitCode)" }
+          if ((Get-Content -LiteralPath (Join-Path $original 'sentinel.txt')) -ne 'original untouched') { throw 'Original install changed' }
+          $process = Start-Process msiexec.exe -ArgumentList @('/x', ('"' + $msi + '"'), '/qn', '/norestart') -Wait -PassThru -WindowStyle Hidden
+          if ($process.ExitCode -ne 0) { throw "MSI uninstall failed: $($process.ExitCode)" }
+          if ((Get-Content -LiteralPath (Join-Path $original 'sentinel.txt')) -ne 'original untouched') { throw 'Original install changed on uninstall' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ZapFast-DAP-Windows-installer
+          path: dist/ZapFast-DAP-x64.msi
+          retention-days: 7
+          if-no-files-found: ignore
