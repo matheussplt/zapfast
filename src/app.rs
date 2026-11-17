@@ -3985,7 +3985,7 @@ impl App {
                 {
                     self.backend.send(Command::LoadCallLog);
                 }
-                if live {
+                if live && !messages.is_empty() {
                     self.backend.send(Command::LoadLocalFollowups(chat.clone()));
                 }
                 let conversation = self.conversations.entry(chat.clone()).or_default();

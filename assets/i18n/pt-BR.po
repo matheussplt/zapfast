@@ -4123,3 +4123,6 @@ msgstr "Enter envia"
 
 #~ msgid "Next pinned message"
 #~ msgstr "Próxima mensagem fixada"
+msgid "Follow-up…"
+msgstr "Acompanhamento…"
+

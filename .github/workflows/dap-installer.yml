@@ -14,7 +14,8 @@ jobs:
     timeout-minutes: 90
     env:
       ZAPFAST_DAP_VARIANT: '1'
-      MAKE: nmake
+      OPENSSL_NO_VENDOR: '1'
+      VCPKGRS_TRIPLET: x64-windows-static-md
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -38,6 +39,18 @@ jobs:
           $env:PATH = "$perlDir;$env:PATH"
           $perlDir | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
           & (Join-Path $perlDir 'perl.exe') -v
+      - name: Provide native OpenSSL through vcpkg
+        shell: pwsh
+        run: |
+          $root = $env:VCPKG_INSTALLATION_ROOT
+          if (!$root) { $root = 'C:\vcpkg' }
+          $tool = Join-Path $root 'vcpkg.exe'
+          if (!(Test-Path -LiteralPath $tool)) { throw 'vcpkg missing from Windows runner' }
+          "VCPKG_ROOT=$root" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          & $tool install openssl:x64-windows-static-md
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $library = Join-Path $root 'installed\x64-windows-static-md\lib\libcrypto.lib'
+          if (!(Test-Path -LiteralPath $library)) { throw 'Native OpenSSL library missing' }
       - name: Test individual requests
         run: |
           mbx test --locked --lib archive::followups

@@ -7071,6 +7071,7 @@ fn message_menu_labels(locale: crate::i18n::Locale) -> Vec<String> {
         gettext(locale, "Reply privately"),
         gettext(locale, "Star"),
         gettext(locale, "Unstar"),
+        gettext(locale, "Follow-up…"),
         gettext(locale, "Pin message"),
         gettext(locale, "Unpin message"),
         gettext(locale, "Forward"),
@@ -7436,12 +7437,13 @@ fn context_menu(
         });
         ui.close();
     }
-    let followup_label = match view.followups.and_then(|items| items.get(&message.id)) {
-        Some(request) if request.done => "Follow-up: done…",
-        Some(_) => "Follow-up: pending…",
-        None => "Add follow-up…",
-    };
-    if item(ui, Icon::Bell, followup_label) {
+    if !matches!(message.content, Content::Revoked)
+        && item(
+            ui,
+            Icon::Bell,
+            &crate::i18n::gettext(view.locale, "Follow-up…"),
+        )
+    {
         actions.push(Action::ShowDialog(Dialog::LocalFollowup {
             chat: chat.clone(),
             message: message.id.clone(),
